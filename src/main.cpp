@@ -2,7 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include "CacheSimulator.h"
+#include "../include/CacheSimulator.h"
 
 using namespace std;
 
@@ -24,41 +24,57 @@ int main(int argc, char *argv[])
     // Default parameters
     string trace_name = "sample";
     int s = 5;
-    int E = 4;
-    int b = 5;
+    int E = 2;
+    int b = 6;
     string outfile_name;
 
     // Parse command line arguments
-    for (int i = 1; i < argc; ++i) {
+    for (int i = 1; i < argc; ++i)
+    {
         string arg = argv[i];
-        if (arg == "-h") {
+        if (arg == "-h")
+        {
             printUsage(argv[0]);
             return 0;
-        } else if (arg == "-t" && i + 1 < argc) {
+        }
+        else if (arg == "-t" && i + 1 < argc)
+        {
             trace_name = argv[++i];
-        } else if (arg == "-s" && i + 1 < argc) {
+        }
+        else if (arg == "-s" && i + 1 < argc)
+        {
             s = stoi(argv[++i]);
-        } else if (arg == "-E" && i + 1 < argc) {
+        }
+        else if (arg == "-E" && i + 1 < argc)
+        {
             E = stoi(argv[++i]);
-        } else if (arg == "-b" && i + 1 < argc) {
+        }
+        else if (arg == "-b" && i + 1 < argc)
+        {
             b = stoi(argv[++i]);
-        } else if (arg == "-o" && i + 1 < argc) {
+        }
+        else if (arg == "-o" && i + 1 < argc)
+        {
             outfile_name = argv[++i];
-        } else {
+        }
+        else
+        {
             cerr << "Unknown or incomplete option: " << arg << endl;
             printUsage(argv[0]);
             return 1;
         }
     }
 
-    if (s <= 0 || E <= 0 || b <= 0) {
+    if (s <= 0 || E <= 0 || b <= 0)
+    {
         cerr << "Error: Invalid cache parameters." << endl;
         printUsage(argv[0]);
         return 1;
     }
 
     CacheSimulator simulator(s, E, b);
-    if (!simulator.loadTraces(trace_name)) {
+    if (!simulator.loadTraces(trace_name))
+    {
         cerr << "Error loading trace files." << endl;
         return 1;
     }
@@ -66,15 +82,18 @@ int main(int argc, char *argv[])
     simulator.runSimulation();
 
     ofstream outfile;
-    if (!outfile_name.empty()) {
+    if (!outfile_name.empty())
+    {
         outfile.open(outfile_name);
-        if (!outfile.is_open()) {
+        if (!outfile.is_open())
+        {
             cerr << "Warning: Could not open output file " << outfile_name << endl;
         }
     }
 
     simulator.printResults(outfile);
 
-    if (outfile.is_open()) outfile.close();
+    if (outfile.is_open())
+        outfile.close();
     return 0;
 }

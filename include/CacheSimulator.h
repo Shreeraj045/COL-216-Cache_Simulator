@@ -8,10 +8,18 @@
 #include "L1Cache.h"
 
 // Bus operations for coherence protocol
-enum class BusOperation { BUS_RD, BUS_RDX, BUS_UPGR, FLUSH, FLUSH_OPT };
+enum class BusOperation
+{
+    BUS_RD,
+    BUS_RDX,
+    BUS_UPGR,
+    FLUSH,
+    FLUSH_OPT
+};
 
 // A request on the bus
-struct BusRequest {
+struct BusRequest
+{
     int core_id;
     BusOperation operation;
     uint32_t address;
@@ -22,12 +30,14 @@ struct BusRequest {
 };
 
 // Statistics for bus activity
-struct BusStats {
+struct BusStats
+{
     int invalidations = 0;
     long long data_traffic_bytes = 0;
 };
 
-class CacheSimulator {
+class CacheSimulator
+{
 public:
     CacheSimulator(int s, int E, int b);
     bool loadTraces(const std::string &app_name);
