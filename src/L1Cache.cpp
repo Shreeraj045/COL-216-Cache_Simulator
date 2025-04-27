@@ -64,8 +64,9 @@ int L1Cache::findLRULine(int set_index) const {
 }
 
 void L1Cache::updateLRUCounter(int set_index, int line_index) {
+    int old_counter = cache_sets[set_index][line_index].lru_counter;
     for (int i = 0; i < E; ++i) {
-        if (cache_sets[set_index][i].valid) {
+        if (cache_sets[set_index][i].valid && cache_sets[set_index][i].lru_counter > old_counter) {
             cache_sets[set_index][i].lru_counter--;
         }
     }
@@ -203,7 +204,7 @@ void L1Cache::handleBusRequest(const BusRequest& bus_req, int current_cycle, boo
     switch (bus_req.operation) {
         case BusOperation::BUS_RD:
             // Another core is reading
-            // current state can be M/S/I
+            // current state can be M/S/E
             if (line.state != MESIState::INVALID) {
                 line.state = MESIState::SHARED;
                 provide_data = true;
