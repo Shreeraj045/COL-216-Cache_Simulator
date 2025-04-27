@@ -1,0 +1,34 @@
+# Object files and executables
+*.o
+*.out
+*.exe
+L1simulate
+obj/
+
+# Dependency files
+*.d
+
+# Build directories
+build/
+bin/
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+
+# Debug files
+*.dSYM/
+*.su

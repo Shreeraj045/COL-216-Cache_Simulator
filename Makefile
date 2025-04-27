@@ -1,9 +1,9 @@
-# Makefile
 CC = g++
 CFLAGS = -std=c++17 -Wall -O2
 SRC_DIR = src
+OBJ_DIR = obj
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
-OBJS = $(SRCS:.cpp=.o)
+OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
 TARGET = L1simulate
 
 all: $(TARGET)
@@ -11,10 +11,14 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
-$(SRC_DIR)/%.o: $(SRC_DIR)/%.cpp
-	$(CC) $(CFLAGS) -c $< -o $@
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -I include -c $< -o $@
+
+$(OBJ_DIR):
+	mkdir -p $@
 
 clean:
 	rm -f $(TARGET) $(OBJS)
+	rm -rf $(OBJ_DIR)
 
 .PHONY: all clean
