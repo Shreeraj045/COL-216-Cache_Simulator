@@ -1,4 +1,5 @@
 #include "L1Cache.h"
+#include "CacheSimulator.h" // include definitions for BusRequest and BusOperation
 #include <iostream>
 #include <iomanip>
 using namespace std;
@@ -181,4 +182,120 @@ bool L1Cache::processMemoryRequest(const MemRef& mem_ref, int current_cycle, Bus
     is_blocked = true;
     pending_request = mem_ref;
     return false;
+}
+
+void L1Cache::handleBusRequest(const BusRequest& bus_req, int current_cycle, bool& provide_data, int& transfer_cycles) {
+    if (bus_req.core_id == core_id) return; // Ignore our own requests
+    
+    uint32_t address = bus_req.address;
+    int set_index = getSetIndex(address);
+    uint32_t tag = getTag(address);
+    int line_index = findLineByTag(set_index, tag);
+    
+    provide_data = false;
+    transfer_cycles = 0;
+    
+    // Only proceed if we have the line
+    if (line_index == -1) return;
+    
+    CacheLine& line = cache_sets[set_index][line_index];
+    
+    switch (bus_req.operation) {
+        case BusOperation::BUS_RD:
+            // Another core is reading
+            // current state can be M/S/I
+            if (line.state != MESIState::INVALID) {
+                line.state = MESIState::SHARED;
+                provide_data = true;
+                transfer_cycles = 2 * (B / 4); // 2 cycles per word
+            }
+            break;
+            
+        case BusOperation::BUS_RDX:
+            // Another core is reading with intent to modify
+            if (line.state != MESIState::INVALID) {
+                // Modified -> Invalid, provide data
+                line.state = MESIState::INVALID;
+                line.valid = false;
+                provide_data = true;
+                transfer_cycles = 2 * (B / 4);
+            }
+            break;
+            
+        case BusOperation::BUS_UPGR:
+            // Another core is upgrading from Shared to Modified
+            if (line.state == MESIState::SHARED) {
+                // Shared -> Invalid
+                line.state = MESIState::INVALID;
+                line.valid = false;
+            }
+            break;
+            
+        default:
+            // Flush operations don't affect other caches
+            break;
+    }
+}
+
+void L1Cache::completeMemoryRequest(int current_cycle, bool is_hit, bool received_data_from_cache, MESIState new_state) {
+    if (!is_blocked) return;
+    
+    uint32_t address = pending_request.address;
+    int set_index = getSetIndex(address);
+    uint32_t tag = getTag(address);
+    
+    if (is_hit) {
+        // Bus upgrade completed
+        int line_index = findLineByTag(set_index, tag);
+        if (line_index != -1) {
+            CacheLine& line = cache_sets[set_index][line_index];
+            line.state = new_state;
+        }
+    } else {
+        // Install new line in cache
+        int line_index = findLineByTag(set_index, tag);
+        if (line_index == -1) {
+            // Need to allocate a line
+            line_index = findLRULine(set_index);
+        }
+        
+        CacheLine& line = cache_sets[set_index][line_index];
+        line.valid = true;
+        line.tag = tag;
+        line.state = new_state;
+        
+        // LRU management
+        updateLRUCounter(set_index, line_index);
+    }
+    
+    // Unblock the cache
+    is_blocked = false;
+}
+
+void L1Cache::printCacheState() const {
+    cout << "Core " << core_id << " Cache State:" << endl;
+    for (int i = 0; i < S; ++i) {
+        bool has_valid = false;
+        for (int j = 0; j < E; ++j) {
+            if (cache_sets[i][j].valid) {
+                has_valid = true;
+                break;
+            }
+        }
+        
+        if (has_valid) {
+            cout << "Set " << setw(2) << i << ": ";
+            for (int j = 0; j < E; ++j) {
+                const CacheLine& line = cache_sets[i][j];
+                if (line.valid) {
+                    cout << "0x" << hex << setw(8) << setfill('0') 
+                              << line.tag << dec << "(" << stateToString(line.state) 
+                              << "," << line.lru_counter << ") ";
+                } else {
+                    cout << "-------- ";
+                }
+            }
+            cout << endl;
+        }
+    }
 }
