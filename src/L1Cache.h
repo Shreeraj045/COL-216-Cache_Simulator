@@ -1,12 +1,16 @@
 #pragma once
 #include <cstdint>
 #include <vector>
+#include <string>
 
 // MESI cache coherence states
 enum class MESIState { MODIFIED, EXCLUSIVE, SHARED, INVALID };
 
 // Reference to a memory operation
 struct MemRef { bool is_write; uint32_t address; };
+
+enum class BusOperation;
+struct BusRequest;
 
 // Core statistics
 struct CoreStats {
@@ -34,6 +38,27 @@ class L1Cache {
 public:
     L1Cache(int core_id, int s, int b, int E);
     CoreStats getStats() const;
+    bool isBlocked() const;
+    void unblock(int cycle);
+
+    // Process a memory request, return true if hit, false if miss
+    // If miss, sets needs_bus to true and populates bus_req
+    bool processMemoryRequest(const MemRef& mem_ref, int current_cycle, 
+        BusRequest& bus_req, bool& needs_bus);
+
+    // Handle a bus request from another core
+    // Set provide_data to true if this cache can provide data
+    void handleBusRequest(const BusRequest& bus_req, int current_cycle,
+        bool& provide_data, int& transfer_cycles);
+
+    // Complete a memory request after bus transaction
+    void completeMemoryRequest(int current_cycle, bool is_hit, 
+            bool received_data_from_cache, 
+            MESIState new_state);
+
+    // Debug functions
+    void printCacheState() const;
+    std::string stateToString(MESIState state) const;
 
 private:
     int core_id;
