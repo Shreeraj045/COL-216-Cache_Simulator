@@ -1,39 +1,18 @@
 #pragma once
 #include <vector>
-#include <string>
 #include <fstream>
-#include <unordered_map>
 #include <queue>
+#include <optional>
 #include <cstdint>
+#include <string>
 #include "L1Cache.h"
-
-// Bus operations for coherence protocol
-enum class BusOperation
-{
-    BUS_RD,
-    BUS_RDX,
-    BUS_UPGR,
-    FLUSH,
-    FLUSH_OPT
-};
-
-// A request on the bus
-struct BusRequest
-{
-    int core_id;
-    BusOperation operation;
-    uint32_t address;
-    int start_cycle;
-    int duration;
-    BusRequest(int id, BusOperation op, uint32_t addr, int cycle, int dur)
-        : core_id(id), operation(op), address(addr), start_cycle(cycle), duration(dur) {}
-};
 
 // Statistics for bus activity
 struct BusStats
 {
     int invalidations = 0;
     long long data_traffic_bytes = 0;
+    int transactions = 0; // Count of bus transactions
 };
 
 class CacheSimulator
@@ -45,16 +24,21 @@ public:
     void printResults(std::ofstream &outfile);
 
 private:
+    std::string trace_prefix; // Store trace file prefix for display
     int num_cores = 4;
+    int s_bits;
+    int E_assoc;
+    int b_bits;
     std::vector<L1Cache> caches;
     std::vector<std::vector<MemRef>> trace_data;
     std::vector<size_t> trace_position;
     BusStats bus_stats;
+    std::vector<BusStats> core_bus_stats; // Per-core bus statistics
 
     std::queue<BusRequest> bus_queue;
     bool bus_busy = false;
     int bus_free_cycle = 0;
-    BusRequest *current_bus_transaction = nullptr;
-
-    std::unordered_map<uint32_t, int> address_to_set;
+    std::optional<BusRequest> current_bus;
+    bool current_data_from_cache = false;
+    MESIState current_new_state;
 };

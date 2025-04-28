@@ -19,8 +19,27 @@ struct MemRef
     uint32_t address;
 };
 
-enum class BusOperation;
-struct BusRequest;
+// Bus operations for coherence protocol
+enum class BusOperation
+{
+    BUS_RD,
+    BUS_RDX,
+    BUS_UPGR,
+    FLUSH,
+    FLUSH_OPT
+};
+
+// A request on the bus
+struct BusRequest
+{
+    int core_id;
+    BusOperation operation;
+    uint32_t address;
+    int start_cycle;
+    int duration;
+    BusRequest(int id, BusOperation op, uint32_t addr, int cycle, int dur)
+        : core_id(id), operation(op), address(addr), start_cycle(cycle), duration(dur) {}
+};
 
 // Core statistics
 struct CoreStats
@@ -45,33 +64,34 @@ struct CacheLine
     int lru_counter = 0;
 };
 
-// L1Cache interface
 class L1Cache
 {
 public:
-    L1Cache(int core_id, int s, int b, int E);
+    L1Cache(int core_id, int s_bits, int b_bits, int assoc);
     CoreStats getStats() const;
     bool isBlocked() const;
     void unblock(int cycle);
 
-    // Process a memory request, return true if hit, false if miss
-    // If miss, sets needs_bus to true and populates bus_req
+    // Process a memory request. Returns true if hit, false if miss or upgrade.
+    // bus_reqs is filled with 0, 1, or 2 BusRequests to enqueue for eviction and/or miss.
     bool processMemoryRequest(const MemRef &mem_ref, int current_cycle,
-                              BusRequest &bus_req, bool &needs_bus);
+                              std::vector<BusRequest> &bus_reqs);
 
-    // Handle a bus request from another core
-    // Set provide_data to true if this cache can provide data
+    // Handle a bus request from another core for snooping
     void handleBusRequest(const BusRequest &bus_req, int current_cycle,
                           bool &provide_data, int &transfer_cycles);
 
-    // Complete a memory request after bus transaction
-    void completeMemoryRequest(int current_cycle, bool is_hit,
+    // Complete a memory request after a bus transaction finishes
+    void completeMemoryRequest(int current_cycle, bool is_upgrade,
                                bool received_data_from_cache,
                                MESIState new_state);
 
-    // Debug functions
     void printCacheState() const;
     std::string stateToString(MESIState state) const;
+    int getBlockSize() const;
+    // Methods for simulation loop to account cycles
+    void addExecutionCycle(int cycles);
+    void addIdleCycle(int cycles);
 
 private:
     int core_id;
@@ -84,7 +104,6 @@ private:
     std::vector<std::vector<CacheLine>> cache_sets;
     CoreStats stats;
     bool is_blocked = false;
-    int unblock_cycle = -1;
     MemRef pending_request;
 
     int getSetIndex(uint32_t address) const;
