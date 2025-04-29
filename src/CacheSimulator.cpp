@@ -265,19 +265,26 @@ void CacheSimulator::runSimulation()
                     // Enqueue or process any bus requests from this cycle
                     if (!brs.empty())
                     {
-                        for (auto &r : brs) {
+                        for (auto &r : brs)
+                        {
                             BusRequest q = r;
                             q.start_cycle = cycle;
-                            if (q.operation == BusOperation::BUS_UPGR) {
-                                for (int j = 0; j < num_cores; ++j) {
-                                    if (j == q.core_id) continue;
-                                    bool dummy = false; int dummy2 = 0;
+                            if (q.operation == BusOperation::BUS_UPGR)
+                            {
+                                for (int j = 0; j < num_cores; ++j)
+                                {
+                                    if (j == q.core_id)
+                                        continue;
+                                    bool dummy = false;
+                                    int dummy2 = 0;
                                     caches[j].handleBusRequest(q, cycle, dummy, dummy2);
                                 }
                                 bus_stats.invalidations++;
                                 core_bus_stats[q.core_id].invalidations++;
                                 caches[q.core_id].completeMemoryRequest(cycle, true, false, MESIState::MODIFIED);
-                            } else {
+                            }
+                            else
+                            {
                                 bus_queue.push(q);
                             }
                         }

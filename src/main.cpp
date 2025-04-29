@@ -7,7 +7,7 @@
 #include "../include/CacheSimulator.h"
 
 // Define the DEBUG_MODE variable that other files will reference
-bool DEBUG_MODE = true;
+bool DEBUG_MODE = false;
 
 void printUsage(const std::string &prog)
 {
