@@ -3,6 +3,56 @@
 #include <sstream>
 #include <iomanip> // Add for formatted output
 
+// Reference the global DEBUG_MODE variable defined in main.cpp
+extern bool DEBUG_MODE;
+
+// Helper function to get string representation of bus operation
+std::string busOpToString(BusOperation op)
+{
+    switch (op)
+    {
+    case BusOperation::BUS_RD:
+        return "BUS_RD";
+    case BusOperation::BUS_RDX:
+        return "BUS_RDX";
+    case BusOperation::BUS_UPGR:
+        return "BUS_UPGR";
+    case BusOperation::FLUSH:
+        return "FLUSH";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+// Helper function to print bus queue contents for debugging
+void printBusQueue(const std::queue<BusRequest> &queue)
+{
+    if (queue.empty())
+    {
+        std::cout << "    Queue: [empty]" << std::endl;
+        return;
+    }
+
+    // Create a copy of the queue for iteration
+    std::queue<BusRequest> queueCopy = queue;
+    std::cout << "    Queue: [";
+
+    while (!queueCopy.empty())
+    {
+        const BusRequest &br = queueCopy.front();
+        std::cout << "Core" << br.core_id << ":"
+                  << busOpToString(br.operation)
+                  << ":0x" << std::hex << br.address << std::dec;
+
+        queueCopy.pop();
+        if (!queueCopy.empty())
+        {
+            std::cout << ", ";
+        }
+    }
+    std::cout << "]" << std::endl;
+}
+
 CacheSimulator::CacheSimulator(int s, int E, int b)
     : s_bits(s), E_assoc(E), b_bits(b)
 {
@@ -66,19 +116,53 @@ void CacheSimulator::runSimulation()
     std::vector<bool> done(num_cores, false);
     int cycle = 0;
 
+    std::cout << "===== SIMULATION START =====" << std::endl;
+
     while (remaining > 0)
     {
+        if (DEBUG_MODE)
+        {
+            std::cout << "\n[CYCLE " << std::setw(6) << cycle << "] "
+                      << "Remaining cores: " << remaining
+                      << " | Queue size: " << bus_queue.size()
+                      << " | Bus busy: " << (bus_busy ? "YES" : "NO") << std::endl;
+            printBusQueue(bus_queue); // Print bus queue contents
+        }
+
         // Start next bus transaction if bus is free
         if (!bus_busy && !bus_queue.empty())
         {
-            BusRequest br = bus_queue.front();
-            bus_queue.pop();
+            // Arbitration: pick the request from the lowest core ID
+            std::vector<BusRequest> tmp;
+            while (!bus_queue.empty()) { tmp.push_back(bus_queue.front()); bus_queue.pop(); }
+            int bestIdx = 0;
+            for (int idx = 1; idx < tmp.size(); ++idx) {
+                if (tmp[idx].core_id < tmp[bestIdx].core_id)
+                    bestIdx = idx;
+            }
+            BusRequest br = tmp[bestIdx];
+            // Rebuild queue with other requests
+            for (int idx = 0; idx < tmp.size(); ++idx) {
+                if (idx == bestIdx) continue;
+                bus_queue.push(tmp[idx]);
+            }
+            if (DEBUG_MODE) {
+                std::cout << "[CYCLE " << std::setw(6) << cycle << "] "
+                          << "Arbitration: Selected core " << br.core_id << " bus request" << std::endl;
+            }
             current_bus = br;
-
+            
             // Count this transaction
             bus_stats.transactions++;
             core_bus_stats[br.core_id].transactions++;
 
+            if (DEBUG_MODE) {
+                std::cout << "[CYCLE " << std::setw(6) << cycle << "] "
+                          << "BUS: Core " << br.core_id << " starts "
+                          << busOpToString(br.operation)
+                          << " for address 0x" << std::hex << br.address << std::dec << std::endl;
+            }
+            
             // Snooping
             bool data_cache = false;
             int transfer_cycles = 0;
@@ -181,6 +265,13 @@ void CacheSimulator::runSimulation()
                             BusRequest q = r;
                             q.start_cycle = cycle;
                             bus_queue.push(q);
+                        }
+
+                        if (DEBUG_MODE)
+                        {
+                            std::cout << "[CYCLE " << std::setw(6) << cycle << "] "
+                                      << "Core " << i << " added requests to queue:" << std::endl;
+                            printBusQueue(bus_queue);
                         }
                     }
                     if (hit)

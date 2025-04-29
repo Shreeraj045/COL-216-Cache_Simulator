@@ -3,6 +3,9 @@
 #include <iostream>
 #include <algorithm>
 
+// Reference the global DEBUG_MODE variable defined in main.cpp
+extern bool DEBUG_MODE;
+
 L1Cache::L1Cache(int id, int s_bits, int b_bits, int assoc)
     : core_id(id), s(s_bits), b(b_bits), E(assoc)
 {
@@ -97,11 +100,21 @@ void L1Cache::addIdleCycle(int cycles)
 bool L1Cache::processMemoryRequest(const MemRef &mem_ref, int current_cycle,
                                    std::vector<BusRequest> &bus_reqs)
 {
-    bus_reqs.clear();
+    if (is_blocked)
+        return false;
+
     uint32_t address = mem_ref.address;
     bool is_write = mem_ref.is_write;
 
-    // update counts
+    if (DEBUG_MODE)
+    {
+        std::cout << "[CYCLE " << std::setw(6) << current_cycle << "] "
+                  << "Core " << core_id << " processes "
+                  << (is_write ? "WRITE" : "READ") << " at 0x"
+                  << std::hex << address << std::dec << std::endl;
+    }
+
+    // Process request - count stats
     if (is_write)
         stats.write_count++;
     else
@@ -235,7 +248,22 @@ void L1Cache::completeMemoryRequest(int current_cycle, bool is_upgrade,
 {
     if (!is_blocked)
         return;
+
+    // Debug instruction completion
     uint32_t address = pending_request.address;
+    bool is_write = pending_request.is_write;
+
+    if (DEBUG_MODE)
+    {
+        std::cout << "[CYCLE " << std::setw(6) << current_cycle << "] "
+                  << "Core " << core_id << " completing "
+                  << (is_write ? "WRITE" : "READ") << " at 0x"
+                  << std::hex << address << std::dec
+                  << " | New state: " << stateToString(new_state)
+                  << " | Data from cache: " << (received_data_from_cache ? "YES" : "NO")
+                  << std::endl;
+    }
+
     int set_index = getSetIndex(address);
     uint32_t tag = getTag(address);
     int idx = findLineByTag(set_index, tag);
