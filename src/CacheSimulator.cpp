@@ -134,35 +134,44 @@ void CacheSimulator::runSimulation()
         {
             // Arbitration: pick the request from the lowest core ID
             std::vector<BusRequest> tmp;
-            while (!bus_queue.empty()) { tmp.push_back(bus_queue.front()); bus_queue.pop(); }
+            while (!bus_queue.empty())
+            {
+                tmp.push_back(bus_queue.front());
+                bus_queue.pop();
+            }
             int bestIdx = 0;
-            for (int idx = 1; idx < tmp.size(); ++idx) {
+            for (int idx = 1; idx < tmp.size(); ++idx)
+            {
                 if (tmp[idx].core_id < tmp[bestIdx].core_id)
                     bestIdx = idx;
             }
             BusRequest br = tmp[bestIdx];
             // Rebuild queue with other requests
-            for (int idx = 0; idx < tmp.size(); ++idx) {
-                if (idx == bestIdx) continue;
+            for (int idx = 0; idx < tmp.size(); ++idx)
+            {
+                if (idx == bestIdx)
+                    continue;
                 bus_queue.push(tmp[idx]);
             }
-            if (DEBUG_MODE) {
+            if (DEBUG_MODE)
+            {
                 std::cout << "[CYCLE " << std::setw(6) << cycle << "] "
                           << "Arbitration: Selected core " << br.core_id << " bus request" << std::endl;
             }
             current_bus = br;
-            
+
             // Count this transaction
             bus_stats.transactions++;
             core_bus_stats[br.core_id].transactions++;
 
-            if (DEBUG_MODE) {
+            if (DEBUG_MODE)
+            {
                 std::cout << "[CYCLE " << std::setw(6) << cycle << "] "
                           << "BUS: Core " << br.core_id << " starts "
                           << busOpToString(br.operation)
                           << " for address 0x" << std::hex << br.address << std::dec << std::endl;
             }
-            
+
             // Snooping
             bool data_cache = false;
             int transfer_cycles = 0;
