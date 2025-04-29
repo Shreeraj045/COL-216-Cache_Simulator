@@ -46,6 +46,7 @@ struct CoreStats
 {
     int read_count = 0;
     int write_count = 0;
+    int instruction_count = 0; // count of completed instructions
     int execution_cycles = 0;
     int idle_cycles = 0;
     int cache_misses = 0;
@@ -71,6 +72,7 @@ public:
     CoreStats getStats() const;
     bool isBlocked() const;
     void unblock(int cycle);
+    void recordInstruction(bool is_write); // record completed instruction
 
     // Process a memory request. Returns true if hit, false if miss or upgrade.
     // bus_reqs is filled with 0, 1, or 2 BusRequests to enqueue for eviction and/or miss.

@@ -282,6 +282,7 @@ void CacheSimulator::runSimulation()
                                 bus_stats.invalidations++;
                                 core_bus_stats[q.core_id].invalidations++;
                                 caches[q.core_id].completeMemoryRequest(cycle, true, false, MESIState::MODIFIED);
+                                caches[q.core_id].recordInstruction(q.operation == BusOperation::BUS_RDX || q.operation == BusOperation::BUS_UPGR);
                             }
                             else
                             {
@@ -298,6 +299,7 @@ void CacheSimulator::runSimulation()
                     // Count cycle as execution only if the instruction completed this cycle
                     if (completed)
                     {
+                        caches[i].recordInstruction(ref.is_write); // record read/write instruction
                         caches[i].addExecutionCycle(1);
                         trace_position[i]++;
                     }
@@ -348,7 +350,7 @@ void CacheSimulator::printResults(std::ofstream &outfile)
         auto stats = caches[i].getStats();
         auto bus_stats_core = core_bus_stats[i];
 
-        int total_instructions = stats.read_count + stats.write_count;
+        int total_instructions = stats.instruction_count;
         double miss_rate = 100.0 * stats.cache_misses / total_instructions;
         int total_cycles = stats.execution_cycles + stats.idle_cycles; // Include idle cycles in total
 

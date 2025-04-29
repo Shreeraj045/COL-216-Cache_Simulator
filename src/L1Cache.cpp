@@ -114,12 +114,6 @@ bool L1Cache::processMemoryRequest(const MemRef &mem_ref, int current_cycle,
                   << std::hex << address << std::dec << std::endl;
     }
 
-    // Process request - count stats
-    if (is_write)
-        stats.write_count++;
-    else
-        stats.read_count++;
-
     int set_index = getSetIndex(address);
     uint32_t tag = getTag(address);
     int line_index = findLineByTag(set_index, tag);
@@ -187,7 +181,7 @@ bool L1Cache::processMemoryRequest(const MemRef &mem_ref, int current_cycle,
 
     // main miss request
     BusOperation op = is_write ? BusOperation::BUS_RDX : BusOperation::BUS_RD;
-    BusRequest miss_req(core_id, op, address, current_cycle, 100);
+    BusRequest miss_req(core_id, op, address, current_cycle,99);
     if (need_flush)
         bus_reqs.push_back(flush_req);
     bus_reqs.push_back(miss_req);
@@ -335,4 +329,14 @@ std::string L1Cache::stateToString(MESIState state) const
 int L1Cache::getBlockSize() const
 {
     return B;
+}
+
+// Add method to record instruction count and update read/write stats
+void L1Cache::recordInstruction(bool is_write)
+{
+    if (is_write)
+        stats.write_count++;
+    else
+        stats.read_count++;
+    stats.instruction_count++;
 }
