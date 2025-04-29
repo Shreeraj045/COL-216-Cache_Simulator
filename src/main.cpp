@@ -3,7 +3,11 @@
 #include <fstream>
 #include <string>
 #include <filesystem>
+#include <iomanip>
 #include "../include/CacheSimulator.h"
+
+// Define the DEBUG_MODE variable that other files will reference
+bool DEBUG_MODE = true;
 
 void printUsage(const std::string &prog)
 {
@@ -48,9 +52,17 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    if (DEBUG_MODE)
+    {
+        std::cout << "=== Debug Mode Enabled ===" << std::endl;
+        std::cout << "Parameters: s=" << s << ", E=" << E << ", b=" << b << std::endl;
+        std::cout << "Trace: " << trace_name << std::endl;
+    }
+
     CacheSimulator sim(s, E, b);
     if (!sim.loadTraces(trace_name))
         return 1;
+
     sim.runSimulation();
 
     std::ofstream outfile;
