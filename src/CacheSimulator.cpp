@@ -177,21 +177,17 @@ void CacheSimulator::runSimulation()
             int transfer_cycles = 0;
             if (br.operation == BusOperation::BUS_RD)
             {
+                // Always fetch from memory; snooping caches only invalidate without providing data
                 for (int i = 0; i < num_cores; ++i)
                 {
                     if (i == br.core_id)
                         continue;
-                    bool provide = false;
-                    int tcycles = 0;
-                    caches[i].handleBusRequest(br, cycle, provide, tcycles);
-                    if (provide)
-                    {
-                        data_cache = true;
-                        transfer_cycles = tcycles;
-                    }
+                    bool dummy = false;
+                    int dummy2 = 0;
+                    caches[i].handleBusRequest(br, cycle, dummy, dummy2);
                 }
-                current_data_from_cache = data_cache;
-                current_new_state = data_cache ? MESIState::SHARED : MESIState::EXCLUSIVE;
+                current_data_from_cache = false;
+                current_new_state = MESIState::EXCLUSIVE;
             }
             else
             {
@@ -265,17 +261,26 @@ void CacheSimulator::runSimulation()
                 {
                     const MemRef &ref = trace_data[i][trace_position[i]];
                     std::vector<BusRequest> brs;
-                    bool hit = caches[i].processMemoryRequest(ref, cycle, brs);
-                    caches[i].addExecutionCycle(1);
+                    bool completed = caches[i].processMemoryRequest(ref, cycle, brs);
+                    // Enqueue or process any bus requests from this cycle
                     if (!brs.empty())
                     {
-                        for (auto &r : brs)
-                        {
+                        for (auto &r : brs) {
                             BusRequest q = r;
                             q.start_cycle = cycle;
-                            bus_queue.push(q);
+                            if (q.operation == BusOperation::BUS_UPGR) {
+                                for (int j = 0; j < num_cores; ++j) {
+                                    if (j == q.core_id) continue;
+                                    bool dummy = false; int dummy2 = 0;
+                                    caches[j].handleBusRequest(q, cycle, dummy, dummy2);
+                                }
+                                bus_stats.invalidations++;
+                                core_bus_stats[q.core_id].invalidations++;
+                                caches[q.core_id].completeMemoryRequest(cycle, true, false, MESIState::MODIFIED);
+                            } else {
+                                bus_queue.push(q);
+                            }
                         }
-
                         if (DEBUG_MODE)
                         {
                             std::cout << "[CYCLE " << std::setw(6) << cycle << "] "
@@ -283,8 +288,16 @@ void CacheSimulator::runSimulation()
                             printBusQueue(bus_queue);
                         }
                     }
-                    if (hit)
+                    // Count cycle as execution only if the instruction completed this cycle
+                    if (completed)
+                    {
+                        caches[i].addExecutionCycle(1);
                         trace_position[i]++;
+                    }
+                    else
+                    {
+                        caches[i].addIdleCycle(1);
+                    }
                 }
                 else
                 {
