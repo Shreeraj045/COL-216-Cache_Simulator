@@ -438,7 +438,8 @@ void CacheSimulator::printResults(std::ofstream &outfile)
         }
     }
 
-    // Print overall bus summary
+// Print overall bus summary
+// Print overall bus summary
     std::cout << "Overall Bus Summary:" << std::endl;
     std::cout << "Total Bus Transactions: " << bus_stats.transactions << std::endl;
     std::cout << "Total Bus Traffic (Bytes): " << bus_stats.data_traffic_bytes << std::endl;
