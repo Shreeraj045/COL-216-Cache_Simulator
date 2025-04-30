@@ -1,0 +1,9 @@
+False Sharing: All cores write to different addresses in the same 32-byte block (block size = 2^5 = 32).
+
+Expected Output:
+
+High invalidations and bus transactions due to repeated downgrades (BUS_UPGR/BUS_RDX).
+
+All writes trigger coherence actions, even though no data is truly shared.
+
+Key Metric: High bus traffic (bytes transferred) from repeated block invalidations.
