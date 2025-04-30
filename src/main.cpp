@@ -11,8 +11,10 @@ bool DEBUG_MODE = false;
 
 void printUsage(const std::string &prog)
 {
-    std::cout << "Usage: " << prog << " [-t <appname>] [-s <s>] [-E <E>] [-b <b>] [-o <outfilename>]\n";
-    std::cout << "Defaults: -t sample, -s 5, -E 4, -b 5\n";
+    std::cout << "Usage: " << prog << " [-t <tracefile>] [-s <s>] [-E <E>] [-b <b>] [-o <outfilename>] [-h]\n";
+    std::cout << "Defaults: -t sample, -s 6, -E 2, -b 5\n";
+    std::cout << "  -h: prints this help\n";
+    std::cout << "  -o <outfilename>: logs output in file for plotting etc.\n";
 }
 
 int main(int argc, char *argv[])
