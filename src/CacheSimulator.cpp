@@ -114,7 +114,7 @@ void CacheSimulator::runSimulation()
     std::vector<bool> done(num_cores, false);
     int cycle = 0;
 
-    std::cout << "===== SIMULATION START =====" << std::endl;
+    // std::cout << "===== SIMULATION START =====" << std::endl;
 
     while (remaining > 0)
     {
