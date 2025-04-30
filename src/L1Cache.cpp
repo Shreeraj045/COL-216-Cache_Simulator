@@ -232,7 +232,7 @@ void L1Cache::handleBusRequest(const BusRequest &bus_req, int current_cycle,
                 line->state = MESIState::INVALID;
                 line->valid = false;
                 provide_data = true;
-                transfer_cycles = 200;
+                transfer_cycles = 100;
             }
             else
             {

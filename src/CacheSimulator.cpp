@@ -409,7 +409,7 @@ void CacheSimulator::printResults(std::ofstream &outfile)
         std::cout << "Total Reads: " << stats.read_count << std::endl;
         std::cout << "Total Writes: " << stats.write_count << std::endl;
         std::cout << "Total Execution Cycles: " << total_cycles << std::endl;
-        std::cout << "Active Cycles: " << stats.execution_cycles << std::endl;
+        // std::cout << "Active Cycles: " << stats.execution_cycles << std::endl;
         std::cout << "Idle Cycles: " << stats.idle_cycles << std::endl;
         std::cout << "Cache Misses: " << stats.cache_misses << std::endl;
         std::cout << "Cache Miss Rate: " << std::fixed << std::setprecision(2) << miss_rate << "%" << std::endl;
