@@ -24,8 +24,8 @@ std::string busOpToString(BusOperation op)
     }
 }
 
-// Helper function to print bus queue contents for debugging
-void printBusQueue(const std::queue<BusRequest> &queue)
+// Helper function to print bus queue contents for debugging (priority_queue version)
+void printBusQueue(std::priority_queue<BusRequest, std::vector<BusRequest>, BusRequestComparator> queue)
 {
     if (queue.empty())
     {
@@ -33,19 +33,17 @@ void printBusQueue(const std::queue<BusRequest> &queue)
         return;
     }
 
-    // Create a copy of the queue for iteration
-    std::queue<BusRequest> queueCopy = queue;
     std::cout << "    Queue: [";
 
-    while (!queueCopy.empty())
+    while (!queue.empty())
     {
-        const BusRequest &br = queueCopy.front();
+        const BusRequest &br = queue.top();
         std::cout << "Core" << br.core_id << ":"
                   << busOpToString(br.operation)
                   << ":0x" << std::hex << br.address << std::dec;
 
-        queueCopy.pop();
-        if (!queueCopy.empty())
+        queue.pop();
+        if (!queue.empty())
         {
             std::cout << ", ";
         }
@@ -132,27 +130,10 @@ void CacheSimulator::runSimulation()
         // Start next bus transaction if bus is free
         if (!bus_busy && !bus_queue.empty())
         {
-            // Arbitration: pick the request from the lowest core ID
-            std::vector<BusRequest> tmp;
-            while (!bus_queue.empty())
-            {
-                tmp.push_back(bus_queue.front());
-                bus_queue.pop();
-            }
-            int bestIdx = 0;
-            for (int idx = 1; idx < tmp.size(); ++idx)
-            {
-                if (tmp[idx].core_id < tmp[bestIdx].core_id)
-                    bestIdx = idx;
-            }
-            BusRequest br = tmp[bestIdx];
-            // Rebuild queue with other requests
-            for (int idx = 0; idx < tmp.size(); ++idx)
-            {
-                if (idx == bestIdx)
-                    continue;
-                bus_queue.push(tmp[idx]);
-            }
+            // Arbitration: pick the request from the lowest core ID (priority_queue)
+            BusRequest br = bus_queue.top();
+            bus_queue.pop();
+
             if (DEBUG_MODE)
             {
                 std::cout << "[CYCLE " << std::setw(6) << cycle << "] "
@@ -172,82 +153,152 @@ void CacheSimulator::runSimulation()
                           << " for address 0x" << std::hex << br.address << std::dec << std::endl;
             }
 
-            // Snooping
-            bool data_cache = false;
+            // Snooping - process properly based on the bus operation
+            bool data_from_cache = false;
             int transfer_cycles = 0;
+
+            // Updated based on clarification #21: Read miss allows cache-to-cache transfer, write miss always from memory
             if (br.operation == BusOperation::BUS_RD)
             {
-                // Always fetch from memory; snooping caches only invalidate without providing data
+                // For read miss, check other caches for the data (cache-to-cache transfer allowed)
                 for (int i = 0; i < num_cores; ++i)
                 {
                     if (i == br.core_id)
                         continue;
-                    bool dummy = false;
-                    int dummy2 = 0;
-                    caches[i].handleBusRequest(br, cycle, dummy, dummy2);
+
+                    bool can_provide_data = false;
+                    int this_transfer_cycles = 0;
+                    caches[i].handleBusRequest(br, cycle, can_provide_data, this_transfer_cycles);
+
+                    if (can_provide_data && !data_from_cache)
+                    {
+                        data_from_cache = true;
+                        transfer_cycles = this_transfer_cycles;
+                    }
                 }
-                current_data_from_cache = false;
-                current_new_state = MESIState::EXCLUSIVE;
+
+                // Read miss, set appropriate state
+                current_new_state = data_from_cache ? MESIState::SHARED : MESIState::EXCLUSIVE;
             }
-            else
+            else if (br.operation == BusOperation::BUS_RDX)
             {
-                // Invalidate or write intent
+                // For write miss, always fetch from memory per clarification #21
+                // But still need to invalidate in other caches
                 for (int i = 0; i < num_cores; ++i)
                 {
                     if (i == br.core_id)
                         continue;
+
+                    bool can_provide_data = false;
+                    int this_transfer_cycles = 0;
+                    caches[i].handleBusRequest(br, cycle, can_provide_data, this_transfer_cycles);
+
+                    // Even if another cache has the data, we don't use it for BUS_RDX
+                    // Data always comes from memory for write miss
+                }
+
+                // Always set to MODIFIED for write miss
+                current_new_state = MESIState::MODIFIED;
+                data_from_cache = false; // Force memory access for write miss
+            }
+            else if (br.operation == BusOperation::BUS_UPGR)
+            {
+                // Invalidate in other caches
+                for (int i = 0; i < num_cores; ++i)
+                {
+                    if (i == br.core_id)
+                        continue;
+
                     bool dummy = false;
                     int dummy2 = 0;
                     caches[i].handleBusRequest(br, cycle, dummy, dummy2);
                 }
-                current_data_from_cache = false;
                 current_new_state = MESIState::MODIFIED;
             }
+
+            // Update data source flag
+            current_data_from_cache = data_from_cache;
+
+            // Calculate bus transaction duration
+            int duration;
+            if (br.operation == BusOperation::FLUSH || br.operation == BusOperation::FLUSH_OPT)
+            {
+                duration = 100; // Writeback to memory
+            }
+            else if (br.operation == BusOperation::BUS_RD)
+            {
+                // For read miss, use cache-to-cache if available
+                if (data_from_cache)
+                {
+                    duration = transfer_cycles; // Cache-to-cache transfer (typically 2*N cycles)
+                }
+                else
+                {
+                    duration = 100; // Memory access
+                }
+            }
+            else if (br.operation == BusOperation::BUS_RDX)
+            {
+                // For write miss, always use memory
+                duration = 100; // Memory access
+            }
+            else // BUS_UPGR
+            {
+                duration = 1; // Just invalidation signals
+            }
+
             // Update bus stats
             if (br.operation == BusOperation::BUS_UPGR || br.operation == BusOperation::BUS_RDX)
             {
                 bus_stats.invalidations++;
                 core_bus_stats[br.core_id].invalidations++;
             }
-            if (br.operation == BusOperation::BUS_RD || br.operation == BusOperation::BUS_RDX)
+
+            // Update data traffic stats
+            if (br.operation == BusOperation::BUS_RD && data_from_cache)
             {
-                int Bsize = caches[br.core_id].getBlockSize();
-                bus_stats.data_traffic_bytes += Bsize;
-                core_bus_stats[br.core_id].data_traffic_bytes += Bsize;
+                // For cache-to-cache transfers on read miss
+                int blockSize = caches[br.core_id].getBlockSize();
+                bus_stats.data_traffic_bytes += blockSize;
+                core_bus_stats[br.core_id].data_traffic_bytes += blockSize;
             }
-            else if (br.operation == BusOperation::FLUSH)
+            else if (br.operation == BusOperation::BUS_RD || br.operation == BusOperation::BUS_RDX ||
+                     br.operation == BusOperation::FLUSH || br.operation == BusOperation::FLUSH_OPT)
             {
-                int Bsize = caches[br.core_id].getBlockSize();
-                bus_stats.data_traffic_bytes += Bsize;
-                core_bus_stats[br.core_id].data_traffic_bytes += Bsize;
+                // For memory transfers, count full block size
+                int blockSize = caches[br.core_id].getBlockSize();
+                bus_stats.data_traffic_bytes += blockSize;
+                core_bus_stats[br.core_id].data_traffic_bytes += blockSize;
             }
-            // Determine duration
-            int dur = br.duration;
-            if (br.operation == BusOperation::BUS_RD && data_cache)
-                dur = transfer_cycles;
+
             bus_busy = true;
-            bus_free_cycle = cycle + dur;
+            bus_free_cycle = cycle + duration;
         }
 
         // Complete bus transaction
         if (bus_busy && cycle == bus_free_cycle)
         {
-            BusRequest br = *current_bus;
-            auto &cache = caches[br.core_id];
-            if (br.operation == BusOperation::BUS_UPGR)
+            if (current_bus.has_value())
             {
-                cache.completeMemoryRequest(cycle, true, false, current_new_state);
+                BusRequest br = current_bus.value();
+                auto &cache = caches[br.core_id];
+
+                if (br.operation == BusOperation::BUS_UPGR)
+                {
+                    cache.completeMemoryRequest(cycle, true, false, current_new_state);
+                }
+                else if (br.operation == BusOperation::BUS_RD || br.operation == BusOperation::BUS_RDX)
+                {
+                    cache.completeMemoryRequest(cycle, false, current_data_from_cache, current_new_state);
+                }
+                else if (br.operation == BusOperation::FLUSH || br.operation == BusOperation::FLUSH_OPT)
+                {
+                    cache.unblock(cycle);
+                }
             }
-            else if (br.operation == BusOperation::BUS_RD || br.operation == BusOperation::BUS_RDX)
-            {
-                cache.completeMemoryRequest(cycle, false, current_data_from_cache, current_new_state);
-            }
-            else if (br.operation == BusOperation::FLUSH)
-            {
-                cache.unblock(cycle);
-            }
+
             bus_busy = false;
-            current_bus.reset();
+            current_bus = std::nullopt; // Use std::nullopt instead of reset() to avoid potential issues
         }
 
         // Process each core
@@ -255,6 +306,7 @@ void CacheSimulator::runSimulation()
         {
             if (done[i])
                 continue;
+
             if (!caches[i].isBlocked())
             {
                 if (trace_position[i] < trace_data[i].size())
@@ -262,33 +314,30 @@ void CacheSimulator::runSimulation()
                     const MemRef &ref = trace_data[i][trace_position[i]];
                     std::vector<BusRequest> brs;
                     bool completed = caches[i].processMemoryRequest(ref, cycle, brs);
-                    // Enqueue or process any bus requests from this cycle
+
+                    // Enqueue bus requests from this cycle
                     if (!brs.empty())
                     {
                         for (auto &r : brs)
                         {
-                            BusRequest q = r;
-                            q.start_cycle = cycle;
-                            if (q.operation == BusOperation::BUS_UPGR)
+                            // Set the correct duration based on the operation
+                            if (r.operation == BusOperation::BUS_UPGR)
                             {
-                                for (int j = 0; j < num_cores; ++j)
-                                {
-                                    if (j == q.core_id)
-                                        continue;
-                                    bool dummy = false;
-                                    int dummy2 = 0;
-                                    caches[j].handleBusRequest(q, cycle, dummy, dummy2);
-                                }
-                                bus_stats.invalidations++;
-                                core_bus_stats[q.core_id].invalidations++;
-                                caches[q.core_id].completeMemoryRequest(cycle, true, false, MESIState::MODIFIED);
-                                caches[q.core_id].recordInstruction(q.operation == BusOperation::BUS_RDX || q.operation == BusOperation::BUS_UPGR);
+                                r.duration = 1; // Invalidation signal is fast
+                            }
+                            else if (r.operation == BusOperation::FLUSH || r.operation == BusOperation::FLUSH_OPT)
+                            {
+                                r.duration = 100; // Writeback to memory
                             }
                             else
                             {
-                                bus_queue.push(q);
+                                r.duration = 100; // Default for memory access
                             }
+
+                            r.start_cycle = cycle;
+                            bus_queue.push(r);
                         }
+
                         if (DEBUG_MODE)
                         {
                             std::cout << "[CYCLE " << std::setw(6) << cycle << "] "
@@ -296,6 +345,7 @@ void CacheSimulator::runSimulation()
                             printBusQueue(bus_queue);
                         }
                     }
+
                     // Count cycle as execution only if the instruction completed this cycle
                     if (completed)
                     {
@@ -316,7 +366,7 @@ void CacheSimulator::runSimulation()
             }
             else
             {
-                caches[i].addIdleCycle(1);
+                caches[i].addIdleCycle(1); // Core is stalled waiting for cache miss or bus access
             }
         }
         ++cycle;
@@ -351,7 +401,7 @@ void CacheSimulator::printResults(std::ofstream &outfile)
         auto bus_stats_core = core_bus_stats[i];
 
         int total_instructions = stats.instruction_count;
-        double miss_rate = 100.0 * stats.cache_misses / total_instructions;
+        double miss_rate = (total_instructions > 0) ? (100.0 * stats.cache_misses / total_instructions) : 0.0;
         int total_cycles = stats.execution_cycles + stats.idle_cycles; // Include idle cycles in total
 
         std::cout << "Core " << i << " Statistics:" << std::endl;
@@ -398,5 +448,18 @@ void CacheSimulator::printResults(std::ofstream &outfile)
         outfile << "Bus Summary\n"
                 << "Total Bus Transactions," << bus_stats.transactions << "\n"
                 << "Total Bus Traffic (Bytes)," << bus_stats.data_traffic_bytes << "\n";
+    }
+}
+
+CacheSimulator::~CacheSimulator()
+
+{
+    // Clear the current_bus optional to prevent issues during destruction
+    current_bus = std::nullopt;
+
+    // Clear any remaining bus requests
+    while (!bus_queue.empty())
+    {
+        bus_queue.pop();
     }
 }

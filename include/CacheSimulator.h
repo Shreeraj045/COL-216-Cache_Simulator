@@ -15,10 +15,20 @@ struct BusStats
     int transactions = 0; // Count of bus transactions
 };
 
+struct BusRequestComparator
+{
+    // Comparator for arbitration: lower core_id has higher priority
+    bool operator()(const BusRequest &a, const BusRequest &b) const
+    {
+        return a.core_id > b.core_id;
+    }
+};
+
 class CacheSimulator
 {
 public:
     CacheSimulator(int s, int E, int b);
+    ~CacheSimulator(); // Adding a proper destructor
     bool loadTraces(const std::string &app_name);
     void runSimulation();
     void printResults(std::ofstream &outfile);
@@ -35,7 +45,7 @@ private:
     BusStats bus_stats;
     std::vector<BusStats> core_bus_stats; // Per-core bus statistics
 
-    std::queue<BusRequest> bus_queue;
+    std::priority_queue<BusRequest, std::vector<BusRequest>, BusRequestComparator> bus_queue;
     bool bus_busy = false;
     int bus_free_cycle = 0;
     std::optional<BusRequest> current_bus;

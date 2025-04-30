@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <list>
 
 // MESI cache coherence states
 enum class MESIState
@@ -62,7 +63,6 @@ struct CacheLine
     uint32_t tag = 0;
     MESIState state = MESIState::INVALID;
     std::vector<uint8_t> data;
-    int lru_counter = 0;
 };
 
 class L1Cache
@@ -103,14 +103,13 @@ private:
     int s; // set index bits
     int b; // block offset bits
 
-    std::vector<std::vector<CacheLine>> cache_sets;
+    std::vector<std::list<CacheLine>> cache_sets;
     CoreStats stats;
     bool is_blocked = false;
     MemRef pending_request;
 
     int getSetIndex(uint32_t address) const;
     uint32_t getTag(uint32_t address) const;
-    int findLineByTag(int set_index, uint32_t tag) const;
-    int findLRULine(int set_index) const;
-    void updateLRUCounter(int set_index, int line_index);
+    CacheLine *findLineByTag(int set_index, uint32_t tag);
+    void moveToFront(int set_index, std::list<CacheLine>::iterator it);
 };
